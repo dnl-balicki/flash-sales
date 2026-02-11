@@ -1,10 +1,7 @@
 package com.balicki.flashsales.orders;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
@@ -13,9 +10,11 @@ import java.util.UUID;
 public class OrderController {
 
     private final OrderProducer orderProducer;
+    private final OrderRepository orderRepository;
 
-    public OrderController(OrderProducer orderProducer) {
+    public OrderController(OrderProducer orderProducer, OrderRepository orderRepository) {
         this.orderProducer = orderProducer;
+        this.orderRepository = orderRepository;
     }
 
     @PostMapping
@@ -32,5 +31,19 @@ public class OrderController {
         orderProducer.sendOrder(event);
 
         return ResponseEntity.accepted().body("Order placed successfully with id: " + orderId);
+    }
+
+    @PostMapping("/{id}")
+    public ResponseEntity<OrderResponse> getOrder(@PathVariable UUID id) {
+        return orderRepository.findById(id)
+                .map(order -> new OrderResponse(
+                        order.getId(),
+                        order.getProductId(),
+                        order.getQuantity(),
+                        order.getStatus().name(),
+                        order.getCreatedAt()
+                ))
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 }
