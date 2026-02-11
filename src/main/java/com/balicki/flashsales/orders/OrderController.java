@@ -18,7 +18,7 @@ public class OrderController {
     }
 
     @PostMapping
-    public ResponseEntity<String> placeOrder(@RequestBody OrderRequest request) {
+    public ResponseEntity<OrderReceipt> placeOrder(@RequestBody OrderRequest request) {
         UUID orderId = UUID.randomUUID();
 
         OrderEvent event = new OrderEvent(
@@ -30,10 +30,16 @@ public class OrderController {
 
         orderProducer.sendOrder(event);
 
-        return ResponseEntity.accepted().body("Order placed successfully with id: " + orderId);
+        OrderReceipt response = new OrderReceipt(
+                orderId,
+                "PENDING",
+                "Order queued successfully. Waiting for stock validation."
+        );
+
+        return ResponseEntity.accepted().body(response);
     }
 
-    @PostMapping("/{id}")
+    @GetMapping("/{id}")
     public ResponseEntity<OrderResponse> getOrder(@PathVariable UUID id) {
         return orderRepository.findById(id)
                 .map(order -> new OrderResponse(
