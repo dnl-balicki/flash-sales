@@ -7,4 +7,5 @@ public record ProductResponse(
         String name,
         BigDecimal price,
         Integer stock
-) {}
+) {
+}

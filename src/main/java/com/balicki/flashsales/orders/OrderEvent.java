@@ -7,4 +7,5 @@ public record OrderEvent(
         Long userId,
         Integer quantity,
         Long productId
-) {}
+) {
+}

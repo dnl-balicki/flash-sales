@@ -1,28 +1,65 @@
 package com.balicki.flashsales.orders;
 
+import com.balicki.flashsales.products.Product;
+import com.balicki.flashsales.products.ProductRepository;
+import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 @Component
 public class OrderListener {
 
-    private static final Logger LOG = LoggerFactory.getLogger(OrderListener.class);
+    private static final Logger log = LoggerFactory.getLogger(OrderListener.class);
+
+    private final ProductRepository productRepository;
+    private final OrderRepository orderRepository;
+
+    public OrderListener(ProductRepository productRepository, OrderRepository orderRepository) {
+        this.productRepository = productRepository;
+        this.orderRepository = orderRepository;
+    }
 
     @KafkaListener(topics = "flash-sales-orders", groupId = "flash-sales-group")
+    @Transactional
     public void processOrder(OrderEvent event) {
-        LOG.info("Received Order: {}", event.orderId());
-        LOG.info("User: {}", event.userId());
-        LOG.info("Product: {}", event.productId());
-        LOG.info("Quantity: {}", event.quantity());
+        log.info("Received Order Event: {}", event.orderId());
 
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        Order order = new Order(
+                event.orderId(),
+                event.productId(),
+                event.userId(),
+                event.quantity()
+        );
+
+        Optional<Product> productOpt = productRepository.findById(event.productId());
+
+        if (productOpt.isEmpty()) {
+            log.error("Product Not Found: {}", event.productId());
+            order.setStatus(Order.Status.CANCELLED);
+            orderRepository.save(order);
+            return;
         }
 
-        LOG.info("Order Complete: {}", event.orderId());
+        Product product = productOpt.get();
+
+        if (product.getStock() < event.quantity()) {
+            log.warn("Stock Not enough For Product {}. Order: {}, Stock: {}",
+                    product.getName(), event.quantity(), product.getStock());
+            order.setStatus(Order.Status.CANCELLED);
+            orderRepository.save(order);
+            return;
+        }
+
+        product.setStock(product.getStock() - event.quantity());
+
+        order.setStatus(Order.Status.COMPLETED);
+        orderRepository.save(order);
+
+        log.info("Order Complete: {}. New Stock of {}: {}",
+                event.orderId(), product.getName(), product.getStock());
     }
 }
