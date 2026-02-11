@@ -6,6 +6,7 @@ import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -28,38 +29,43 @@ public class OrderListener {
     public void processOrder(OrderEvent event) {
         log.info("Received Order Event: {}", event.orderId());
 
-        Order order = new Order(
-                event.orderId(),
-                event.productId(),
-                event.userId(),
-                event.quantity()
-        );
+        try {
+            Order order = new Order(
+                    event.orderId(),
+                    event.productId(),
+                    event.userId(),
+                    event.quantity()
+            );
 
-        Optional<Product> productOpt = productRepository.findById(event.productId());
+            Optional<Product> productOpt = productRepository.findById(event.productId());
 
-        if (productOpt.isEmpty()) {
-            log.error("Product Not Found: {}", event.productId());
-            order.setStatus(Order.Status.CANCELLED);
+            if (productOpt.isEmpty()) {
+                log.error("Product Not Found: {}", event.productId());
+                order.setStatus(Order.Status.CANCELLED);
+                orderRepository.save(order);
+                return;
+            }
+
+            Product product = productOpt.get();
+
+            if (product.getStock() < event.quantity()) {
+                log.warn("Stock Not enough For Product {}. Order: {}, Stock: {}",
+                        product.getName(), event.quantity(), product.getStock());
+                order.setStatus(Order.Status.CANCELLED);
+                orderRepository.save(order);
+                return;
+            }
+
+            product.setStock(product.getStock() - event.quantity());
+
+            order.setStatus(Order.Status.COMPLETED);
             orderRepository.save(order);
-            return;
+
+            log.info("Order Complete: {}. New Stock of {}: {}",
+                    event.orderId(), product.getName(), product.getStock());
+        } catch (ObjectOptimisticLockingFailureException e) {
+            log.warn("Concurrency conflict detected for order {}. Kafka will automatically retry", event.orderId());
+            throw e;
         }
-
-        Product product = productOpt.get();
-
-        if (product.getStock() < event.quantity()) {
-            log.warn("Stock Not enough For Product {}. Order: {}, Stock: {}",
-                    product.getName(), event.quantity(), product.getStock());
-            order.setStatus(Order.Status.CANCELLED);
-            orderRepository.save(order);
-            return;
-        }
-
-        product.setStock(product.getStock() - event.quantity());
-
-        order.setStatus(Order.Status.COMPLETED);
-        orderRepository.save(order);
-
-        log.info("Order Complete: {}. New Stock of {}: {}",
-                event.orderId(), product.getName(), product.getStock());
     }
 }

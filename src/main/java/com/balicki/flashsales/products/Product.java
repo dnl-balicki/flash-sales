@@ -21,6 +21,9 @@ public class Product {
     @Column(nullable = false)
     private Integer stock;
 
+    @Version
+    private Long version;
+
     public Product() {
     }
 
@@ -60,5 +63,13 @@ public class Product {
 
     public void setStock(Integer stock) {
         this.stock = stock;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 }
