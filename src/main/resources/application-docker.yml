@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://flash-postgres:5432/flash_sales_db
+    username: user
+    password: password
+
+  kafka:
+    bootstrap-servers: flash-kafka:29092
